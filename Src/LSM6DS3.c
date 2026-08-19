@@ -42,7 +42,7 @@ void _turn_off_SPI1(){
     while((SPI_SR & (1<<1)) == 0){}
 
     // wait until BSY=0
-    while((SPI_SR & (1<<7)) == 1){}
+    while(SPI_SR & (1<<7)){}
 
     // Disable SPI
     SPI_CR1 &= ~(1<<6);
@@ -51,22 +51,24 @@ void _turn_off_SPI1(){
 // Enables SPI1 in GPIOA
 void _SPI1_init(){
 
+    // ---------- Clocks -------------------
+    RCC_AHB1ENR |= 1<<0; // enable GPIOA clock
+    RCC_APB2ENR |= 1<<12; // enable SPI1 clock
+
     // ----------- GPIO init ---------------
     GPIOA_MODER |= (2<<10)|(2<<12)|(2<<14)|(1<<(CS_pin*2));
     GPIOA_OSPEEDR |= (2<<10)|(2<<12)|(2<<14)|(1<<(CS_pin*2)); // high speed
     GPIOA_AFRL |= (5<<20)|(5<<24)|(5<<28); // 5 = spi1-4
 
-    // ---------- Clocks -------------------
-    RCC_AHB1ENR |= 1<<0; // enable GPIOA clock
-    RCC_APB2ENR |= 1<<12; // enable SPI1 clock
-
     // ---------- SPI ----------------------
-    _turn_off_SPI1();
+    //_turn_off_SPI1();
     SPI_CR1 &= ~(0b111<<3); //change baud rate (currently 1/2)
+    SPI_CR1 |= (1<<9); // enable SSM (use gpio pins for cs)
+    SPI_CR1 |= (1<<8); // set SSI high (crutial since active low)
     SPI_CR1 &= ~(1<<11); // 8bit frame format
     SPI_CR1 &= ~(1<<7); // MSb first
     SPI_CR2 &= ~(1<<4); // Motorola mode
-    SPI_CR1 &= ~(1<<2); // Master config
+    SPI_CR1 |= (1<<2); // Master config
     SPI_CR1 |= (1<<6); // SPI enable
 }
 
@@ -75,13 +77,27 @@ void _SPI1_send(uint8_t data){
     // wait fror the TXE buffer to empty
     while((SPI_SR & (1<<1)) == 0){}
 
+    // write data to register
     SPI_DR = data;
+
+    // wait for recieve buffer to fill with trash data
+    while(!(SPI_SR & (1<<0))){}
+
+    // read empty data
+    uint16_t temp = SPI_DR;
+    (void)temp;  
 }
 
 uint8_t _SPI1_receive(){
 
+    // wait fror the TXE buffer to empty
+    while((SPI_SR & (1<<1)) == 0){}
+    
     // send dummy signal
-    _SPI1_send(0);
+    SPI_DR = 0;
+
+    // wait for Receive buffer to fill
+    while(!(SPI_SR & (1<<0))){}
 
     uint16_t data = SPI_DR;
     return (uint8_t)data;
@@ -117,7 +133,7 @@ void LSM6DS3_init(){
     // ------- enable XL --------------
     _cs_enable();
     _SPI1_send(0x10); // addr for CTRL1_XR
-    _SPI1_send(0b01110000); //! 833 HZ (change?)
+    _SPI1_send(0b01110000); //! 833 HZ & +-2g (change?)
     _cs_disable();
 
     // ------- enable gyro ------------
@@ -127,34 +143,24 @@ void LSM6DS3_init(){
     _cs_disable();
 }
 
-struct gyro_data{
-    int16_t x;
-    int16_t y;
-    int16_t z;
-};
-struct gyro_data get_gyro_data(){
+struct data_3D get_gyro_data(){
 
     int16_t x_data = _get_16bit_data(0x23,0x22);
     int16_t y_data = _get_16bit_data(0x25,0x24);
     int16_t z_data = _get_16bit_data(0x27,0x26);
 
-    struct gyro_data data = {x_data, y_data, z_data};
+    struct data_3D data = {x_data, y_data, z_data};
 
     return data;
 }
 
-struct accel_data{
-    int16_t x;
-    int16_t y;
-    int16_t z;
-};
-struct accel_data get_accel_data(){
+struct data_3D get_accel_data(){
 
     int16_t x_data = _get_16bit_data(0x29,0x28);
     int16_t y_data = _get_16bit_data(0x2B,0x2A);
     int16_t z_data = _get_16bit_data(0x2D,0x2C);
 
-    struct accel_data data = {x_data, y_data, z_data};
+    struct data_3D data = {x_data, y_data, z_data};
 
     return data;
 }
