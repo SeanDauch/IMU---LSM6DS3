@@ -60,6 +60,8 @@ void _SPI1_init(){
     GPIOA_OSPEEDR |= (2<<10)|(2<<12)|(2<<14)|(1<<(CS_pin*2)); // high speed
     GPIOA_AFRL |= (5<<20)|(5<<24)|(5<<28); // 5 = spi1-4
 
+    GPIOA_ODR |= (1<<CS_pin); // cs triggers on falling edge so set high in setup
+
     // ---------- SPI ----------------------
     //_turn_off_SPI1();
     SPI_CR1 &= ~(0b111<<3); //change baud rate (currently 1/2)
@@ -107,8 +109,11 @@ uint8_t _SPI1_receive(){
 
 // gets data from sensor at specific address
 uint8_t _get_data_from_addr(uint8_t address){
+
+    uint8_t adjusted_addr = address | (1<<7); // first bit is R/W
+
     _cs_enable();
-    _SPI1_send(address);
+    _SPI1_send(adjusted_addr);
     uint8_t data = _SPI1_receive();
     _cs_disable();
 
