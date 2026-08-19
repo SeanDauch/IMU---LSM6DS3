@@ -107,7 +107,19 @@ uint8_t _SPI1_receive(){
 
 // ------------------------------- Sensor --------------------------------------
 
-// gets data from sensor at specific address
+// sends write command to data at specific address
+void _write_data_at_addr(uint8_t address, uint8_t data){
+
+    // not neccesary but just for clairty (MSB = 0 means write)
+    uint8_t adjusted_addr = address & ~(1<<7);
+
+    _cs_enable();
+    _SPI1_send(adjusted_addr);
+    _SPI1_send(data);
+    _cs_disable();
+}
+
+// reads data from sensor at specific address
 uint8_t _get_data_from_addr(uint8_t address){
 
     uint8_t adjusted_addr = address | (1<<7); // first bit is R/W
@@ -135,17 +147,33 @@ void LSM6DS3_init(){
 
     _SPI1_init();
 
+    // ------- configure filters ------
+    
+    // gyros are smooth but they drift
+    // use HPF to catch changes but limit small consitent errors
+    // addr for CTRL7_G //! HPF en with fc= 2hz
+    _write_data_at_addr(0x16, 0b01100000);
+
+    // XL are jittery especialy with movement 
+    // use LPF to catch gravity but not movement
+    // addr for CTRL8_XL //! LPF en with fc = ODR/100
+    _write_data_at_addr(0x17, 0b10100100);
+
+
     // ------- enable XL --------------
-    _cs_enable();
-    _SPI1_send(0x10); // addr for CTRL1_XR
-    _SPI1_send(0b01110000); //! 833 HZ & +-2g (change?)
-    _cs_disable();
+    // addr for CTRL1_XR //! 833 HZ & +-2g (change?)
+    _write_data_at_addr(0x10, 0b01110000);
 
     // ------- enable gyro ------------
-    _cs_enable();
-    _SPI1_send(0x11); // addr for CTRL2_G
-    _SPI1_send(0b01110000); //! 833 HZ & 250dps (change?)
-    _cs_disable();
+    // addr for CTRL2_G //! 833 HZ & 250dps (change?)
+    _write_data_at_addr(0x11, 0b01110000);
+}
+
+uint8_t read_status_register(){
+
+    uint8_t data = _get_data_from_addr(0x1E);
+    
+    return data;
 }
 
 struct data_3D get_gyro_data(){
