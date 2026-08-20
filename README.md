@@ -1,3 +1,7 @@
+As far as I can tell my sensor has a hardware defect so I will move on with a different IMU 
+  - The z-axis would not read and significant reading from gravity when lying flat on the table
+  - Other axis were able to read full ranges of gravity but z-axis could only read gravity when upside down  
+
 Using Stm32F411CEU6 and LSM6DS3 IMU
 
 ### IMU link
