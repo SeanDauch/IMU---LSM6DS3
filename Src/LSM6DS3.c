@@ -116,6 +116,10 @@ void _write_data_at_addr(uint8_t address, uint8_t data){
     _cs_enable();
     _SPI1_send(adjusted_addr);
     _SPI1_send(data);
+
+    // wait for transmition to complete (Busyflag lower)
+    while(SPI_SR & (1<<7)){}
+
     _cs_disable();
 }
 
@@ -137,15 +141,20 @@ int16_t _get_16bit_data(uint8_t high_addr, uint8_t low_addr){
     uint8_t low = _get_data_from_addr(low_addr);
     uint8_t high = _get_data_from_addr(high_addr);
 
-    int16_t data = (high<<8)|low;
+    uint16_t data = ((uint16_t)high<<8) | (uint16_t)low;
 
-    return data;
+    return (int16_t)data;
 }
 
 // turns on both gyro and accelerometer
 void LSM6DS3_init(){
 
     _SPI1_init();
+
+    // reset sensor at each boot
+    _write_data_at_addr(0x12, 1);
+    // wait for reset to finish
+    while(_get_data_from_addr(0x12) & (1<<0)){}
 
     // ------- configure filters ------
     
@@ -157,16 +166,20 @@ void LSM6DS3_init(){
     // XL are jittery especialy with movement 
     // use LPF to catch gravity but not movement
     // addr for CTRL8_XL //! LPF en with fc = ODR/100
-    _write_data_at_addr(0x17, 0b10100100);
+    _write_data_at_addr(0x17, 0b11100100);
+    _write_data_at_addr(0x58, 0b00010000); // enable XL_filters
 
 
     // ------- enable XL --------------
-    // addr for CTRL1_XR //! 833 HZ & +-2g (change?)
-    _write_data_at_addr(0x10, 0b01110000);
+    // addr for CTRL1_XR //! 833 HZ & +-8g (change?)
+    _write_data_at_addr(0x10, 0b01111100);
 
     // ------- enable gyro ------------
     // addr for CTRL2_G //! 833 HZ & 250dps (change?)
     _write_data_at_addr(0x11, 0b01110000);
+
+    // Trigger Positive Accelerometer Self-Test (CTRL5_C)
+    //_write_data_at_addr(0x14, 0x01);
 }
 
 uint8_t read_status_register(){
